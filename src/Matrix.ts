@@ -11,10 +11,10 @@ export default class Matrix {
   
     get(i: number, j: number) {
       if (i < 0 || i >= this.rows) {
-        throw new Error("row out of bounds");
+        throw new Error(`row out of bounds: matrix is ${this.rows} x ${this.cols}, but got index (${i}, ${j})`);
       }
       if (j < 0 || j >= this.cols) {
-        throw new Error("col out of bounds");
+        throw new Error(`col out of bounds: matrix is ${this.rows} x ${this.cols}, but got index (${i}, ${j})`);
       }
       return this.data[i * this.cols + j];
     }
@@ -35,6 +35,17 @@ export default class Matrix {
         }
       }
       return new Matrix(data, this.rows, other.cols);
+    }
+
+    map(fn: (x: number) => number) {
+      return new Matrix(this.data.map(fn), this.rows, this.cols);
+    }
+
+    mapElemwise(fn: (x: number, y: number) => number, other: Matrix) {
+      return new Matrix(
+        this.data.map((x, i) => fn(x, other.data[i])),
+        this.rows, this.cols,
+      );
     }
   }
   
