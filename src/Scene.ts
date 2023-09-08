@@ -12,58 +12,26 @@ interface Slice {
 
 function drawSlice(s: Slice, projMatrix: ProjectionMatrix, offset: Vertex, context: CanvasRenderingContext2D) {
     let v3d: [Vertex3D, Vertex3D, Vertex3D];
+    if (s.id % 2 === 0) {
+        v3d = [
+            s.pos,
+            [s.pos[0] + 1, s.pos[1], s.pos[2]],
+            [s.pos[0] + 1, s.pos[1] + 1, s.pos[2]],
+        ];
+    } else {
+        v3d = [
+            s.pos,
+            [s.pos[0] + 1, s.pos[1] + 1, s.pos[2]],
+            [s.pos[0], s.pos[1] + 1, s.pos[2]],
+        ];
+    }
     let color: Color;
-    switch (s.id) {
-        case 0:
-            v3d = [
-                s.pos,
-                [s.pos[0] + 1, s.pos[1], s.pos[2]],
-                [s.pos[0] + 1, s.pos[1] + 1, s.pos[2]],
-            ];
-            color = s.parent.color;
-            break;
-        case 1:
-            v3d = [
-                s.pos,
-                [s.pos[0], s.pos[1], s.pos[2] - 1],
-                [s.pos[0], s.pos[1] + 1, s.pos[2]],
-            ];
-            color = s.parent.color.scaled(0.8);
-            break;
-        case 2:
-            v3d = [
-                s.pos,
-                [s.pos[0], s.pos[1] - 1, s.pos[2] - 1],
-                [s.pos[0], s.pos[1], s.pos[2] - 1],
-            ];
-            color = s.parent.color.scaled(0.8);
-            break;
-        case 3:
-            v3d = [
-                s.pos,
-                [s.pos[0], s.pos[1], s.pos[2] - 1],
-                [s.pos[0] - 1, s.pos[1], s.pos[2] - 1],
-            ];
-            color = s.parent.color.scaled(0.9);
-            break;
-        case 4:
-            v3d = [
-                s.pos,
-                [s.pos[0] + 1, s.pos[1], s.pos[2]],
-                [s.pos[0], s.pos[1], s.pos[2] - 1],
-            ];
-            color = s.parent.color.scaled(0.9);
-            break;
-        case 5:
-            v3d = [
-                s.pos,
-                [s.pos[0] + 1, s.pos[1] + 1, s.pos[2]],
-                [s.pos[0], s.pos[1] + 1, s.pos[2]],
-            ];
-            color = s.parent.color;
-            break;
-        default:
-            throw new Error("Invalid slice id");
+    if (s.id === 0 || s.id === 5) {
+        color = s.parent.color;
+    } else if (s.id === 1 || s.id === 2) {
+        color = s.parent.color.scaled(0.8);
+    } else {
+        color = s.parent.color.scaled(0.9);
     }
     const vertices = v3d.map((v) => {
         const v2d = [v[0] - v[2], v[1] - v[2]] as Vertex;
@@ -98,27 +66,43 @@ function posForId(id: number, pos: Vertex3D): Vertex3D {
     }
 }
 
+function getSliceInfo(b: Block, id: number): [string, Slice] {
+    let pos = b.origin;
+    switch (id) {
+        case 0:
+            break;
+        case 1:
+            pos = [pos[0], pos[1] - 1, pos[2] - 1];
+            break;
+        case 2:
+            pos = [pos[0], pos[1], pos[2] - 1];
+            break;
+        case 3:
+            pos = [pos[0], pos[1], pos[2] - 1];
+            break;
+        case 4:
+            pos = [pos[0] - 1, pos[1], pos[2] - 1];
+            break;  
+        case 5:
+            break;
+        default:
+            throw new Error("Invalid slice id");
+    }
+    pos = [0, pos[1] - pos[0], pos[2] - pos[0]];
+    const key = `${pos[1]},${pos[2]},${id % 2}`;
+    const slice: Slice = {
+        pos,
+        id,
+        parent: b,
+    };
+    return [key, slice];
+}
+
 export default class Scene {
     private blocks: Block[] = [];
     constructor() { }
 
     addBlock(b: Block) {
-        // // inserts block while preserving ordering
-        // if (this.blocks.length === 0) {
-        //     this.blocks = [b];
-        //     return;
-        // }
-        // let left = 0;
-        // let right = this.blocks.length - 1;
-        // while (left <= right) {
-        //     const mid = Math.floor((left + right) / 2);
-        //     if (b.drawAfter(this.blocks[mid])) {
-        //         left = mid + 1;
-        //     } else {
-        //         right = mid - 1;
-        //     }
-        // }
-        // this.blocks = [...this.blocks.slice(0, left), b, ...this.blocks.slice(left)];
         this.blocks.push(b);
     }
 
@@ -126,15 +110,10 @@ export default class Scene {
         const slices = new Map<string, Slice>();
         for (let b of this.blocks) {
             for (let id = 0; id < 6; id++) {
-                const s: Slice = {
-                    pos: posForId(id, b.origin),
-                    id,
-                    parent: b,
-                };
-                const key = `${s.pos}${s.id % 2}`;
+                const [key, val] = getSliceInfo(b, id);
                 const current = slices.get(key);
                 if (current === undefined || b.drawAfter(current.parent)) {
-                    slices.set(key, s);
+                    slices.set(key, val);
                 }
             }
         }

@@ -14,4 +14,6 @@ const projMatrix = new ProjectionMatrix(Math.PI / 3, 16);
 const heightMap = perlinLayers(40, 40, [20, 8], [9, 7]);
 const scene = sceneFromHeightMap(heightMap, -8);
 
-scene.draw(projMatrix, [Math.floor(canvas.width * 0.5), 1], context);
+const time0 = Date.now();
+scene.draw(projMatrix, [Math.floor(canvas.width * 0.5), 20], context);
+console.log(`Rendered in ${Date.now() - time0}ms`);
