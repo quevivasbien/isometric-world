@@ -1,10 +1,12 @@
 mod utils;
 mod triangles;
+mod scene;
 
 use wasm_bindgen::prelude::*;
 
 type Vertex = [f32; 2];
-type Vertex3D = [f32; 3];
+type Pos2 = [i32; 2];
+type Pos3 = [i32; 3];
 
 const THETA: f32 = std::f32::consts::FRAC_PI_6;
 
@@ -16,17 +18,17 @@ pub struct Color {
 }
 
 impl Color {
-    pub fn scaled(&self, c: u8) -> Color {
+    pub fn scaled(&self, c: f32) -> Color {
         Color {
-            r: u8::min(1, u8::max(0, self.r * c)),
-            g: u8::min(1, u8::max(0, self.g * c)),
-            b: u8::min(1, u8::max(0, self.b * c)),
+            r: (((self.r as f32) * c) as u8).min(255).max(0),
+            g: (((self.g as f32) * c) as u8).min(255).max(0),
+            b: (((self.b as f32) * c) as u8).min(255).max(0),
         }
     }
 }
 
 pub struct Block {
-    origin: Vertex3D,
+    origin: Pos3,
     color: Color,
 }
 
@@ -59,10 +61,10 @@ impl ProjectionMatrix {
         )
     }
 
-    fn proj(&self, v: Vertex) -> Vertex {
+    fn proj(&self, v: Pos2) -> Vertex {
         [
-            self.0 * v[0] + self.1 * v[1],
-            self.2 * v[0] + self.3 * v[1],
+            self.0 * (v[0] as f32) + self.1 * (v[1] as f32),
+            self.2 * (v[0] as f32) + self.3 * (v[1] as f32),
         ]
     }
 }
@@ -96,10 +98,6 @@ impl Canvas {
     pub fn get_data(&self) -> &Vec<u8> {
         &self.data
     }
-}
-
-pub struct Scene {
-    
 }
 
 #[wasm_bindgen]
