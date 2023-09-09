@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
-use crate::{Block, ProjectionMatrix, Vertex, Canvas, Color, triangles::Triangle, Pos3};
+use wasm_bindgen::prelude::wasm_bindgen;
+
+use crate::{Block, ProjectionMatrix, Vertex, Canvas, Color, triangles::Triangle, Pos2};
 
 struct Slice<'a> {
-    pos: Pos3,
+    pos: Pos2,
     index: u8,
     parent: &'a Block,
 }
@@ -14,7 +16,7 @@ struct SliceKey(i32, i32, bool);
 impl<'a> Slice<'a> {
     fn create(index: u8, parent: &'a Block) -> (SliceKey, Slice<'a>) {
         assert!(index < 6);
-        let pos = if index == 0 || index == 5 {
+        let pos3 = if index == 0 || index == 5 {
             parent.origin
         } else if index == 1 {
             [parent.origin[0], parent.origin[1] - 1, parent.origin[2] - 1]
@@ -23,7 +25,8 @@ impl<'a> Slice<'a> {
         } else {
             [parent.origin[0], parent.origin[1], parent.origin[2] - 1]
         };
-        (SliceKey(pos[1], pos[2], index % 2 == 0), Self { pos, index, parent })
+        let pos = [pos3[0] - pos3[2], pos3[1] - pos3[2]];
+        (SliceKey(pos3[0], pos3[1], index % 2 == 0), Self { pos: pos, index, parent })
     }
     fn points_right(&self) -> bool {
         self.index % 2 == 0
@@ -39,25 +42,23 @@ impl<'a> Slice<'a> {
     }
 
     fn draw(&self, proj_matrix: &ProjectionMatrix, offset: &Vertex, canvas: &mut Canvas) {
-        let v3d = if self.points_right() {
+        let v = if self.points_right() {
             [
                 self.pos,
-                [self.pos[0] + 1, self.pos[1], self.pos[2]],
-                [self.pos[0] + 1, self.pos[1], self.pos[2]],
+                [self.pos[0] + 1, self.pos[1]],
+                [self.pos[0] + 1, self.pos[1]],
             ]
         } else {
             [
                 self.pos,
-                [self.pos[0] + 1, self.pos[1] + 1, self.pos[2]],
-                [self.pos[0], self.pos[1] + 1, self.pos[2]],
+                [self.pos[0] + 1, self.pos[1] + 1],
+                [self.pos[0], self.pos[1] + 1],
             ]
         };
         let mut vertices = [[0f32; 2]; 3];
         for i in 0..3 {
-            let v = v3d[i];
-            let v2d = [v[0] - v[2], v[1] - v[2]];
-            let proj = proj_matrix.proj(v2d);
-            vertices[i] = [proj[0] + offset[0], proj[1] + offset[1]]
+            let proj = proj_matrix.proj(v[i]);
+            vertices[i] = [proj[0] + offset[0], proj[1] + offset[1]];
         }
         Triangle::new(vertices, self.color()).draw(canvas);
     }
@@ -68,7 +69,7 @@ pub struct Scene {
 }
 
 impl Scene {
-    fn draw(&self, proj_matrix: &ProjectionMatrix, offset: &Vertex, canvas: &mut Canvas) {
+    pub fn draw(&self, proj_matrix: &ProjectionMatrix, offset: &Vertex, canvas: &mut Canvas) {
         let mut slices = HashMap::<SliceKey, Slice>::new();
         for b in self.blocks.iter() {
             for index in 0..6 {

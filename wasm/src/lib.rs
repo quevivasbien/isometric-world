@@ -2,6 +2,7 @@ mod utils;
 mod triangles;
 mod scene;
 
+use scene::Scene;
 use wasm_bindgen::prelude::*;
 
 type Vertex = [f32; 2];
@@ -28,8 +29,8 @@ impl Color {
 }
 
 pub struct Block {
-    origin: Pos3,
-    color: Color,
+    pub origin: Pos3,
+    pub color: Color,
 }
 
 impl Block {
@@ -100,13 +101,14 @@ impl Canvas {
     }
 }
 
-#[wasm_bindgen]
-extern "C" {
-    fn alert(s: &str);
-}
 
 #[wasm_bindgen]
-pub fn greet(s: &str) {
+pub fn render_test(h: usize, w: usize) -> Vec<u8> {
     utils::set_panic_hook();
-    alert(&format!("You requested: {}", s));
+    let mut canvas = Canvas::new(h, w);
+    let scene = Scene { blocks: vec![Block { origin: [0, 0, 0], color: Color { r: 255, g: 0, b: 0 } }] };
+    let proj_matrix = ProjectionMatrix::new(32.);
+    scene.draw(&proj_matrix, &[100., 100.], &mut canvas);
+    
+    canvas.get_data().clone()
 }
