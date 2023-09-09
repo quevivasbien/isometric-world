@@ -47,25 +47,6 @@ function drawSlice(s: Slice, projMatrix: ProjectionMatrix, offset: Vertex, conte
     );
 }
 
-function posForId(id: number, pos: Vertex3D): Vertex3D {
-    switch (id) {
-        case 0:
-            return pos;
-        case 1:
-            return [pos[0] + 1, pos[1], pos[2]];
-        case 2:
-            return [pos[0] + 1, pos[1] + 1, pos[2]];
-        case 3:
-            return [pos[0] + 1, pos[1] + 1, pos[2]];
-        case 4:
-            return [pos[0], pos[1] + 1, pos[2]];
-        case 5:
-            return pos;
-        default:
-            throw new Error("Invalid slice id");
-    }
-}
-
 function getSliceInfo(b: Block, id: number): [string, Slice] {
     let pos = b.origin;
     switch (id) {

@@ -17,3 +17,9 @@ const scene = sceneFromHeightMap(heightMap, -8);
 const time0 = Date.now();
 scene.draw(projMatrix, [Math.floor(canvas.width * 0.5), 20], context);
 console.log(`Rendered in ${Date.now() - time0}ms`);
+
+import init, { greet } from 'wasm';
+
+init().then(() => {
+  greet("Hello");  
+});
