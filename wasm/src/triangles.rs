@@ -1,5 +1,7 @@
 use std::cmp::Ordering;
 
+use wasm_bindgen_test::console_log;
+
 use crate::{Vertex, Color, Canvas};
 
 
@@ -19,7 +21,12 @@ impl Triangle {
 
     fn draw_flat_bottom(&self, canvas: &mut Canvas) {
         // draw under the assumption that vertices 1 and 2 are at equal y value
-        let [v0, v1, v2] = self.vertices;
+        let [v0, v1_, v2_] = self.vertices;
+        let (v1, v2) = if v1_[0] < v2_[0] {
+            (v1_, v2_)
+        } else {
+            (v2_, v1_)
+        };
         let invslope0 = (v1[0] - v0[0]) / (v1[1] - v0[1]);
         let invslope1 = (v2[0] - v0[0]) / (v2[1] - v0[1]);
         let mut curx0 = v0[0];
@@ -27,7 +34,7 @@ impl Triangle {
         for scanline_y in (v0[1] as usize)..=(v1[1] as usize) {
             // draw line between curx0 and curx1 at current scanline
             for x in (curx0 as usize)..=(curx1 as usize) {
-                canvas.set_pixel(x, scanline_y, &self.fill)
+                canvas.set_pixel(scanline_y, x, &self.fill)
             }
             // advance curx0 and curx1
             curx0 += invslope0;
@@ -36,7 +43,12 @@ impl Triangle {
     }
     fn draw_flat_top(&self, canvas: &mut Canvas) {
         // draw under the assumption that vertices 1 and 2 are at equal y value
-        let [v0, v1, v2] = self.vertices;
+        let [v0_, v1_, v2] = self.vertices;
+        let (v0, v1) = if v0_[0] < v1_[0] {
+            (v0_, v1_)
+        } else {
+            (v1_, v0_)
+        };
         let invslope0 = (v2[0] - v0[0]) / (v2[1] - v0[1]);
         let invslope1 = (v2[0] - v1[0]) / (v2[1] - v1[1]);
         let mut curx0 = v2[0];
@@ -44,7 +56,7 @@ impl Triangle {
         for scanline_y in ((v0[1] as usize)..=(v2[1] as usize)).rev() {
             // draw line between curx0 and curx1 at current scanline
             for x in (curx0 as usize)..=(curx1 as usize) {
-                canvas.set_pixel(x, scanline_y, &self.fill)
+                canvas.set_pixel(scanline_y, x, &self.fill)
             }
             // advance curx0 and curx1
             curx0 -= invslope0;

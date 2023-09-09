@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use wasm_bindgen::prelude::wasm_bindgen;
-
 use crate::{Block, ProjectionMatrix, Vertex, Canvas, Color, triangles::Triangle, Pos2};
 
 struct Slice<'a> {
@@ -26,7 +24,7 @@ impl<'a> Slice<'a> {
             [parent.origin[0], parent.origin[1], parent.origin[2] - 1]
         };
         let pos = [pos3[0] - pos3[2], pos3[1] - pos3[2]];
-        (SliceKey(pos3[0], pos3[1], index % 2 == 0), Self { pos: pos, index, parent })
+        (SliceKey(pos[0], pos[1], index % 2 == 0), Self { pos, index, parent })
     }
     fn points_right(&self) -> bool {
         self.index % 2 == 0
@@ -46,7 +44,7 @@ impl<'a> Slice<'a> {
             [
                 self.pos,
                 [self.pos[0] + 1, self.pos[1]],
-                [self.pos[0] + 1, self.pos[1]],
+                [self.pos[0] + 1, self.pos[1] + 1],
             ]
         } else {
             [

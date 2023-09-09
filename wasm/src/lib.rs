@@ -106,7 +106,12 @@ impl Canvas {
 pub fn render_test(h: usize, w: usize) -> Vec<u8> {
     utils::set_panic_hook();
     let mut canvas = Canvas::new(h, w);
-    let scene = Scene { blocks: vec![Block { origin: [0, 0, 0], color: Color { r: 255, g: 0, b: 0 } }] };
+    let blocks = vec![
+        Block { origin: [0, 0, 0], color: Color { r: 255, g: 0, b: 0 } },
+        Block { origin: [0, 1, 0], color: Color { r: 255, g: 0, b: 0 } },
+        Block { origin: [0, 1, 1], color: Color { r: 255, g: 0, b: 124 } },
+    ];
+    let scene = Scene { blocks };
     let proj_matrix = ProjectionMatrix::new(32.);
     scene.draw(&proj_matrix, &[100., 100.], &mut canvas);
     
