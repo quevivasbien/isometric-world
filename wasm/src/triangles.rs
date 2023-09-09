@@ -1,13 +1,17 @@
 use std::cmp::Ordering;
 
-use wasm_bindgen_test::console_log;
-
 use crate::{Vertex, Color, Canvas};
 
 
 pub struct Triangle {
     vertices: [Vertex; 3],
     fill: Color,
+}
+
+fn draw_horizontal_segment(x0: usize, x1: usize, y: usize, color: &Color, canvas: &mut Canvas) {
+    for x in x0..x1 {
+        canvas.set_pixel(y, x, color)
+    }
 }
 
 impl Triangle {
@@ -31,10 +35,10 @@ impl Triangle {
         let invslope1 = (v2[0] - v0[0]) / (v2[1] - v0[1]);
         let mut curx0 = v0[0];
         let mut curx1 = v0[0];
-        for scanline_y in (v0[1] as usize)..=(v1[1] as usize) {
+        for scanline_y in (v0[1] as i32)..=(v1[1] as i32) {
             // draw line between curx0 and curx1 at current scanline
-            for x in (curx0 as usize)..=(curx1 as usize) {
-                canvas.set_pixel(scanline_y, x, &self.fill)
+            if scanline_y >= 0 {
+                draw_horizontal_segment(curx0 as usize, curx1 as usize, scanline_y as usize, &self.fill, canvas);
             }
             // advance curx0 and curx1
             curx0 += invslope0;
@@ -53,10 +57,10 @@ impl Triangle {
         let invslope1 = (v2[0] - v1[0]) / (v2[1] - v1[1]);
         let mut curx0 = v2[0];
         let mut curx1 = v2[0];
-        for scanline_y in ((v0[1] as usize)..=(v2[1] as usize)).rev() {
+        for scanline_y in ((v0[1] as i32)..=(v2[1] as i32)).rev() {
             // draw line between curx0 and curx1 at current scanline
-            for x in (curx0 as usize)..=(curx1 as usize) {
-                canvas.set_pixel(scanline_y, x, &self.fill)
+            if scanline_y >= 0 {
+                draw_horizontal_segment(curx0 as usize, curx1 as usize, scanline_y as usize, &self.fill, canvas);
             }
             // advance curx0 and curx1
             curx0 -= invslope0;

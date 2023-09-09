@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{Block, ProjectionMatrix, Vertex, Canvas, Color, triangles::Triangle, Pos2};
+use crate::{Block, ProjectionMatrix, Vertex, Canvas, Color, triangles::Triangle, Pos2, terrain::Heightmap};
 
 struct Slice<'a> {
     pos: Pos2,
@@ -67,6 +67,22 @@ pub struct Scene {
 }
 
 impl Scene {
+    pub fn from_heightmap(h: Heightmap, min_height: i32) -> Self {
+        let mut blocks = Vec::new();
+        h.data.iter().enumerate().for_each(
+            |(idx, height)| {
+                let (i, j) = (idx / h.cols, idx % h.cols);
+                for z in min_height..=(*height as i32) {
+                    blocks.push(Block {
+                        origin: [j as i32, i as i32, z],
+                        color: Color { r: 255, g: 0, b: 0 },
+                    });
+                }
+            }
+        );
+        Self { blocks }
+    }
+
     pub fn draw(&self, proj_matrix: &ProjectionMatrix, offset: &Vertex, canvas: &mut Canvas) {
         let mut slices = HashMap::<SliceKey, Slice>::new();
         for b in self.blocks.iter() {

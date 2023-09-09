@@ -1,8 +1,10 @@
 mod utils;
 mod triangles;
 mod scene;
+mod terrain;
 
 use scene::Scene;
+use terrain::perlin_layers;
 use wasm_bindgen::prelude::*;
 
 type Vertex = [f32; 2];
@@ -103,17 +105,13 @@ impl Canvas {
 
 
 #[wasm_bindgen]
-pub fn render_test(h: usize, w: usize) -> Vec<u8> {
+pub fn render_test(h: usize, w: usize, offset_x: f32, offset_y: f32) -> Vec<u8> {
     utils::set_panic_hook();
     let mut canvas = Canvas::new(h, w);
-    let blocks = vec![
-        Block { origin: [0, 0, 0], color: Color { r: 255, g: 0, b: 0 } },
-        Block { origin: [0, 1, 0], color: Color { r: 255, g: 0, b: 0 } },
-        Block { origin: [0, 1, 1], color: Color { r: 255, g: 0, b: 124 } },
-    ];
-    let scene = Scene { blocks };
-    let proj_matrix = ProjectionMatrix::new(32.);
-    scene.draw(&proj_matrix, &[100., 100.], &mut canvas);
+    let heightmap = perlin_layers(40, 40, vec![20, 8], vec![9., 7.]);
+    let scene = Scene::from_heightmap(heightmap, -8);
+    let proj_matrix = ProjectionMatrix::new(16.);
+    scene.draw(&proj_matrix, &[offset_x, offset_y], &mut canvas);
     
     canvas.get_data().clone()
 }
