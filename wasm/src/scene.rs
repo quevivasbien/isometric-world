@@ -1,11 +1,9 @@
 use std::{collections::HashMap, hash::Hash};
 
-// use wasm_bindgen_test::console_log;
-
 use crate::{Vertex, Canvas, Color, triangles::Triangle, Pos2, Pos3, terrain::Heightmap, utils::{round_down, round_up}};
 
 const THETA: f32 = std::f32::consts::FRAC_PI_6;
-const CHUNK_SIZE: i32 = 32;
+const CHUNK_SIZE: i32 = 16;
 
 struct Block {
     pub origin: Pos3,
@@ -89,14 +87,14 @@ impl ProjectionMatrix {
         )
     }
 
-    fn proj(&self, v: Vertex) -> Vertex {
+    pub fn proj(&self, v: Vertex) -> Vertex {
         [
             self.0 * v[0] + self.1 * v[1],
             self.2 * v[0] + self.3 * v[1],
         ]
     }
 
-    fn inverse(&self) -> Self {
+    pub fn inverse(&self) -> Self {
         let det = self.0 * self.3 - self.1 * self.2;
         Self(
             self.3 / det, -self.1 / det,
@@ -241,7 +239,7 @@ impl Scene {
             |(idx, height)| {
                 let (i, j) = (idx / h.cols, idx % h.cols);
                 for z in min_height..=(*height as i32) {
-                    let x = (256. * (1. / ((1 + z - min_height) as f32).powf(0.4))) as u8;
+                    let x = (256. * (1. / ((1 + z - min_height) as f32).powf(0.35))) as u8;
                     scene.add(Block {
                         origin: [j as i32, i as i32, z],
                         color: Color { r: x, g: x, b: x },
@@ -256,7 +254,6 @@ impl Scene {
     pub fn draw(&self, camera: &Camera) -> Canvas {
         let mut slices = HashMap::<SliceKey, Slice>::new();
         for chunk in camera.in_view(&self.chunks) {
-            // console_log!("Visible: {:?}", chunk.bounds);
             chunk.process_slices(&mut slices)
         }
         let mut canvas = Canvas::new(camera.height, camera.width);

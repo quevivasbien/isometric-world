@@ -5,7 +5,9 @@ mod terrain;
 
 use scene::{Scene, Camera};
 use terrain::perlin_layers;
-use wasm_bindgen::prelude::*;
+use wasm_bindgen::{prelude::*, Clamped};
+
+use crate::utils::set_panic_hook;
 
 type Vertex = [f32; 2];
 
@@ -83,12 +85,39 @@ impl Canvas {
     }
 }
 
+#[wasm_bindgen]
+pub struct StateManager {
+    scene: Scene,
+    camera: Camera,
+    canvas: Canvas,
+}
 
 #[wasm_bindgen]
-pub fn render_test(h: usize, w: usize, offset_x: f32, offset_y: f32, boxheight: usize, boxwidth: usize, scale: f32) -> Vec<u8> {
-    utils::set_panic_hook();
-    let heightmap = perlin_layers(boxheight, boxwidth, vec![20, 8], vec![9., 7.]);
-    let scene = Scene::from_heightmap(heightmap, -8);
-    let camera = Camera::new([-offset_x, -offset_y], h, w, scale);
-    scene.draw(&camera).data
+impl StateManager {
+    pub fn new(
+        height: usize, width: usize, perlin_periods: Vec<usize>, perlin_amplitudes: Vec<f32>,
+        pixel_height: usize, pixel_width: usize, scale: f32,
+    ) -> Self {
+        set_panic_hook();
+        let max_amp = perlin_amplitudes.clone().into_iter().reduce(|acc, x| acc.max(x)).unwrap();
+        let heightmap = perlin_layers(height, width, perlin_periods, perlin_amplitudes);
+        let scene = Scene::from_heightmap(heightmap, -(max_amp as i32));
+        let camera = Camera::new([0., 0.], pixel_height, pixel_width, scale);
+        let canvas = Canvas::new(pixel_height, pixel_width);
+        Self {
+            scene, camera, canvas
+        }
+    }
+
+    pub fn draw(&mut self) {
+        self.canvas = self.scene.draw(&self.camera);
+    }
+
+    pub fn get_canvas(&self) -> Clamped<Vec<u8>> {
+        Clamped(self.canvas.data.clone())
+    }
+
+    pub fn shift(&mut self, dx: f32, dy: f32) {
+        self.camera.origin = [self.camera.origin[0] + dx, self.camera.origin[1] + dy];
+    }
 }
