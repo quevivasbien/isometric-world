@@ -1,6 +1,8 @@
 use rand::{thread_rng, Rng};
 use rand_distr::{StandardNormal, Uniform};
 
+use crate::Matrix;
+
 fn randn() -> f32 {
     thread_rng().sample(StandardNormal)
 }
@@ -25,35 +27,21 @@ fn interpolate(x0: f32, x1: f32, w: f32) -> f32 {
     x0 + smoothstep(w) * (x1 - x0)
 }
 
-struct Grads {
-    xdata: Vec<f32>,
-    ydata: Vec<f32>,
-    rows: usize,
-    cols: usize,
-}
+struct Grads(Matrix<(f32, f32)>);
 
 impl Grads {
     fn new(rows: usize, cols: usize) -> Self {
-        let xdata = (0..rows * cols).map(
-            |_| randn()
+        let data = (0..rows * cols).map(
+            |_| (randn(), randn())
         ).collect();
-        let ydata = (0..rows * cols).map(
-            |_| randn()
-        ).collect();
- 
-        Self { xdata, ydata, rows, cols }
-    }
 
-    fn get(&self, xi: usize, yi: usize) -> (f32, f32) {
-        let i = yi * self.cols + xi;
- 
-        (self.xdata[i], self.ydata[i])
+        Self(Matrix::new(data, rows, cols))
     }
-
+    
     fn dotgrad(&self, x: f32, y: f32, xi: usize, yi: usize) -> f32 {
         let dx = x - (xi as f32);
         let dy = y - (yi as f32);
-        let (gx, gy) = self.get(xi, yi);
+        let (gx, gy) = self.0.get(yi, xi);
         
         dx * gx + dy * gy
     }

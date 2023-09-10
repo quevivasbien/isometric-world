@@ -8,3 +8,11 @@ pub fn set_panic_hook() {
     #[cfg(feature = "console_error_panic_hook")]
     console_error_panic_hook::set_once();
 }
+
+pub fn round_down(x: i32, by: i32) -> i32 {
+    x.div_euclid(by) * by
+}
+
+pub fn round_up(x: i32, by: i32) -> i32 {
+    -round_down(-x, -by)
+}

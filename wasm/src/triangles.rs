@@ -21,8 +21,6 @@ impl Triangle {
         Self { vertices, fill }
     }
 
-    // I may have problems here if vertex coordinates are negative...
-
     fn draw_flat_bottom(&self, canvas: &mut Canvas) {
         // draw under the assumption that vertices 1 and 2 are at equal y value
         let [v0, v1_, v2_] = self.vertices;

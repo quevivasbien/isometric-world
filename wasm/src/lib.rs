@@ -3,15 +3,14 @@ mod triangles;
 mod scene;
 mod terrain;
 
-use scene::Scene;
+use scene::{Scene, Camera};
 use terrain::perlin_layers;
 use wasm_bindgen::prelude::*;
 
 type Vertex = [f32; 2];
+
 type Pos2 = [i32; 2];
 type Pos3 = [i32; 3];
-
-const THETA: f32 = std::f32::consts::FRAC_PI_6;
 
 #[derive(Clone)]
 pub struct Color {
@@ -30,50 +29,35 @@ impl Color {
     }
 }
 
-pub struct Block {
-    pub origin: Pos3,
-    pub color: Color,
+pub struct Matrix<T: Copy> { 
+    data: Vec<T>,
+    rows: usize,
+    cols: usize,
 }
 
-impl Block {
-    pub fn draw_after(&self, other: &Block) -> bool {
-        let t = self.origin;
-        let o = other.origin;
-        if t[2] > o[2] {
-            return true
-        } else if t[2] < o[2] {
-            return false
-        }
-        if t[1] > o[1] {
-            return true;
-        } else if t[1] < o[1] {
-            return false;
-        }
-
-        t[0] > o[0]
+impl<T: Copy> Matrix<T> {
+    pub fn new(data: Vec<T>, rows: usize, cols: usize) -> Self {
+        assert_eq!(data.len(), rows * cols);
+        Matrix { data, rows, cols }
     }
-}
-
-pub struct ProjectionMatrix(f32, f32, f32, f32);
-
-impl ProjectionMatrix {
-    pub fn new(scale: f32) -> Self {
-        Self(
-            scale * f32::cos(THETA), -scale * f32::cos(THETA),
-            scale * f32::sin(THETA), scale * f32::sin(THETA),
-        )
+    pub fn nrows(&self) -> usize {
+        self.rows
     }
-
-    fn proj(&self, v: Pos2) -> Vertex {
-        [
-            self.0 * (v[0] as f32) + self.1 * (v[1] as f32),
-            self.2 * (v[0] as f32) + self.3 * (v[1] as f32),
-        ]
+    pub fn ncols(&self) -> usize {
+        self.cols
+    }
+    pub fn get(&self, i: usize, j: usize) -> T {
+        let idx = i * self.cols + j;
+        self.data[idx]
+    }
+    pub fn set(&mut self, i: usize, j: usize, value: T) {
+        let idx = i * self.cols + j;
+        self.data[idx] = value;
     }
 }
 
 pub struct Canvas {
-    data: Vec<u8>,
+    pub data: Vec<u8>,
     rows: usize,
     cols: usize,
 }
@@ -97,21 +81,14 @@ impl Canvas {
         self.data[i0 + 2] = c.b;
         self.data[i0 + 3] = 255;
     }
-
-    pub fn get_data(&self) -> &Vec<u8> {
-        &self.data
-    }
 }
 
 
 #[wasm_bindgen]
-pub fn render_test(h: usize, w: usize, offset_x: f32, offset_y: f32) -> Vec<u8> {
+pub fn render_test(h: usize, w: usize, offset_x: f32, offset_y: f32, boxheight: usize, boxwidth: usize, scale: f32) -> Vec<u8> {
     utils::set_panic_hook();
-    let mut canvas = Canvas::new(h, w);
-    let heightmap = perlin_layers(40, 40, vec![20, 8], vec![9., 7.]);
+    let heightmap = perlin_layers(boxheight, boxwidth, vec![20, 8], vec![9., 7.]);
     let scene = Scene::from_heightmap(heightmap, -8);
-    let proj_matrix = ProjectionMatrix::new(16.);
-    scene.draw(&proj_matrix, &[offset_x, offset_y], &mut canvas);
-    
-    canvas.get_data().clone()
+    let camera = Camera::new([-offset_x, -offset_y], h, w, scale);
+    scene.draw(&camera).data
 }
