@@ -1,6 +1,6 @@
 use std::{collections::HashMap, hash::Hash};
 
-use crate::{Vertex, Canvas, Color, triangles::Triangle, Pos2, Pos3, terrain::Heightmap, utils::{round_down, round_up}};
+use crate::{Vertex, Canvas, Color, triangles::Triangle, Pos2, Pos3, terrain::Heightmap, utils::{round_down, round_up}, to_vertex};
 
 const THETA: f32 = std::f32::consts::FRAC_PI_6;
 const CHUNK_SIZE: i32 = 16;
@@ -104,8 +104,8 @@ impl ProjectionMatrix {
 }
 
 pub struct Camera {
-    // the point[origin[0], origin[1], 0] should be rendered at the top right corner of the display
-    pub origin: Vertex,
+    // the point in 2d space that should be rendered at the top-right corner of the screen
+    pub origin: Pos2,
     // screen dimensions in terms of pixels
     pub height: usize,
     pub width: usize,
@@ -115,7 +115,7 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub fn new(origin: Vertex, height: usize, width: usize, scale: f32) -> Self {
+    pub fn new(origin: Pos2, height: usize, width: usize, scale: f32) -> Self {
         Camera {
             origin,
             height, width,
@@ -128,9 +128,9 @@ impl Camera {
     // assumes that hash map keys are same as chunk origins, and chunk bounds are divisible by CHUNK_SIZE
     fn in_view<'a>(&self, chunks: &'a HashMap<Pos2, Chunk>) -> Vec<&'a Chunk> {
         // first get coordinates of screen bounds at z = 0
-        let [x0, y0] = self.origin;
+        let [x0, y0] = to_vertex(self.origin);
         let inv_proj = self.proj_matrix.inverse();
-        let top_left = inv_proj.proj(self.origin);
+        let top_left = inv_proj.proj([x0, y0]);
         let top_right = inv_proj.proj([x0 + self.width as f32, y0]);
         let bottom_left = inv_proj.proj([x0, y0 + self.height as f32]);
         let bottom_right = inv_proj.proj([x0 + self.width as f32, y0 + self.height as f32]);
@@ -191,7 +191,7 @@ impl<'a> Slice<'a> {
         }
     }
 
-    fn draw(&self, proj_matrix: &ProjectionMatrix, origin: &Vertex, canvas: &mut Canvas) {
+    fn draw(&self, proj_matrix: &ProjectionMatrix, origin: Pos2, canvas: &mut Canvas) {
         let v = if self.points_right() {
             [
                 self.pos,
@@ -206,9 +206,10 @@ impl<'a> Slice<'a> {
             ]
         };
         let mut vertices = [[0f32; 2]; 3];
+        let o32 = to_vertex(origin);
         for i in 0..3 {
             let proj = proj_matrix.proj([v[i][0] as f32, v[i][1] as f32]);
-            vertices[i] = [proj[0] - origin[0], proj[1] - origin[1]];
+            vertices[i] = [proj[0] - o32[0], proj[1] - o32[1]];
         }
         Triangle::new(vertices, self.color()).draw(canvas);
     }
@@ -258,7 +259,7 @@ impl Scene {
         }
         let mut canvas = Canvas::new(camera.height, camera.width);
         for (_, slice) in slices.into_iter() {
-            slice.draw(&camera.proj_matrix, &camera.origin, &mut canvas);
+            slice.draw(&camera.proj_matrix, camera.origin, &mut canvas);
         }
 
         canvas

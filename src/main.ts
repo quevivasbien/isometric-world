@@ -7,11 +7,13 @@ const context = canvas.getContext("2d") as CanvasRenderingContext2D;
 canvas.width = window.innerWidth * 0.75;
 canvas.height = canvas.width * 0.75;
 
-function render(state: StateManager) {
-  const time0 = Date.now();
-  state.draw();
+function render(state: StateManager, draw = true) {
+  if (draw) {
+    const time0 = Date.now();
+    state.draw();
+    console.log(`Rendered in ${Date.now() - time0}ms`);
+  }
   const bytes = state.get_canvas();
-  console.log(`Rendered in ${Date.now() - time0}ms`);
   const imageData = context.createImageData(canvas.width, canvas.height);
   imageData.data.set(bytes);
   context.putImageData(imageData, 0, 0);
@@ -23,7 +25,7 @@ function randomState() {
   const state = StateManager.new(
     150, 150, 
     new Uint32Array([20, 8]), new Float32Array([9, 7]),
-    canvas.height, canvas.width, 12.,
+    canvas.height, canvas.width, 12,
   );
   state.shift(-offsetX, -offsetY);
   return state;
@@ -35,30 +37,51 @@ init().then(() => {
   let state = randomState();
   render(state);
 
-  const shiftView = (dx: number, dy: number) => {
-    state.shift(dx, dy);
-    state.draw();
-    render(state);
-  };
+  let needsRefresh = false;
+  function requestMove(dir: 'up' | 'down' | 'left' | 'right') {
+    switch(dir) {
+      case 'up':
+        state.shift_y(-STEP_SIZE);
+        break;
+      case 'down':
+        state.shift_y(STEP_SIZE);
+        break;
+      case 'left':
+        state.shift_x(-STEP_SIZE);
+        break;
+      case 'right':
+        state.shift_x(STEP_SIZE);
+        break;
+    }
+    render(state, false);
+    needsRefresh = true;
+  }
 
   document.addEventListener('keypress', (e) => {
     switch (e.key) {
       case "w":
-        shiftView(0, STEP_SIZE);
+        requestMove('up');
         break;
       case "s":
-        shiftView(0, -STEP_SIZE);
+        requestMove('down');
         break;
       case "a":
-        shiftView(STEP_SIZE, 0);
+        requestMove('left');
         break;
       case "d":
-        shiftView(-STEP_SIZE, 0);
+        requestMove('right');
         break;
       case " ":
-        let state = randomState();
+        state = randomState();
         render(state);
         break;
     }
   });
+
+  setInterval(() => {
+    if (needsRefresh) {
+      needsRefresh = false;
+      render(state);
+    }
+  }, 1000);
 });
