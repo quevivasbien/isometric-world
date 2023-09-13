@@ -1,22 +1,26 @@
-use rand::{thread_rng, Rng};
-use rand_distr::{StandardNormal, Uniform};
+use std::ops::BitXor;
+use itertools::iproduct;
 
 use crate::Matrix;
 
-fn randn() -> f32 {
-    thread_rng().sample(StandardNormal)
+fn inverse_probit(x: f32) -> f32 {
+    -(1. / x - 1.).ln() / 1.702
 }
 
-fn random() -> f32 {
-    thread_rng().sample(Uniform::new(0., 1.))
+fn simple_hash(x: i32) -> i32 {
+    let x = x.wrapping_shl(16).bitxor(x) * 0x45d9f3b;
+    let x = x.wrapping_shl(16).bitxor(x) * 0x45d9f3b;
+    let x = x.wrapping_shl(16).bitxor(x);
+    x
 }
 
-fn linspace(start: f32, end: f32, length: usize) -> Vec<f32> {
-    let step = (end - start) / ((length - 1) as f32);
-    (0..length).scan(0., |state, _| {
-        *state = *state + step;
-        Some(*state)
-    }).collect()
+// hashes should be approximately normally distributed
+// note that this is very crude since both my hash and my inverse probit approximant are crudely constructed,
+// but it should be fine for the use case here
+pub fn randn_hash(v: i32) -> f32 {
+    let i = simple_hash(v);
+    let f = ((i as f32 / i32::MAX as f32) + 1.) / 2.;
+    inverse_probit(f)
 }
 
 fn smoothstep(x: f32) -> f32 {
@@ -27,26 +31,57 @@ fn interpolate(x0: f32, x1: f32, w: f32) -> f32 {
     x0 + smoothstep(w) * (x1 - x0)
 }
 
-struct Grads(Matrix<(f32, f32)>);
+struct Grads {
+    grads: Matrix<(f32, f32)>,
+    x0: i32, y0: i32, step: usize,
+}
 
 impl Grads {
-    fn new(rows: usize, cols: usize) -> Self {
-        let data = (0..rows * cols).map(
-            |_| (randn(), randn())
+    fn new(
+        // height and width are size of noise block that grads overlay
+        height: usize, width: usize,
+        // x0 and y0 are origin of noise block
+        x0: i32, y0: i32,
+        // step is distance between grad nodes, must divide height and width
+        step: usize
+    ) -> Self {
+        assert!(height % step == 0 && width % step == 0);
+        // console_log!("Initializing grads with x0 = {}, y0 = {}", x0, y0);
+        let nrows = height / step;
+        let ncols = height / step;
+        let data = (0..nrows * ncols).map(
+            |i| {
+                let row = i / ncols;
+                let col = i % ncols;
+                let x = x0 + (col * step) as i32;
+                let y = y0 + (row * step) as i32;
+                let hashkey = x.wrapping_mul(y).wrapping_mul(step as i32);
+                (randn_hash(hashkey), randn_hash(-hashkey))
+            }
         ).collect();
 
-        Self(Matrix::new(data, rows, cols))
+        Self {
+            grads: Matrix::new(data, nrows as usize, ncols as usize),
+            x0, y0, step,
+        }
     }
     
     fn dotgrad(&self, x: f32, y: f32, xi: usize, yi: usize) -> f32 {
         let dx = x - (xi as f32);
         let dy = y - (yi as f32);
-        let (gx, gy) = self.0.get(yi, xi);
+        // console_log!("getting ({}, {})", yi, xi);
+        let (gx, gy) = self.grads.get(yi.min(self.grads.rows - 1), xi.min(self.grads.cols - 1));
         
         dx * gx + dy * gy
     }
 
-    fn perlin_at(&self, x: f32, y: f32) -> f32 {
+    fn perlin_at(&self, x: i32, y: i32) -> f32 {
+        // console_log!("perlin_at({}, {})", x, y);
+        // normalize to units of grad indices
+        let x = (x - self.x0) as f32 / self.step as f32;
+        let y = (y - self.y0) as f32 / self.step as f32;
+        // console_log!("({}, {})", x, y);
+
         let x0 = x as usize;
         let x1 = x0 + 1;
         let y0 = y as usize;
@@ -73,28 +108,23 @@ pub struct Heightmap {
     pub cols: usize,
 }
 
-fn perlin(height: usize, width: usize, grad_period: usize) -> Heightmap {
-    let gradcols = 2 + (width / grad_period).max(0);
-    let gradrows = 2 + (height / grad_period).max(0);
-    let grads = Grads::new(gradrows, gradcols);
-    let ys = linspace(1. + random(), (gradrows - 1) as f32 - random(), height);
-    let xs = linspace(1. + random(), (gradcols - 1) as f32 - random(), width);
+fn perlin(height: usize, width: usize, x0: i32, y0: i32, step: usize) -> Heightmap {
+    let grads = Grads::new(height, width, x0, y0, step);
+    let ys = y0..(y0 + width as i32);
+    let xs = x0..(x0 + width as i32);
 
-    let data = (0..height * width).map(
-        |idx| {
-            let (i, j) = (idx / width, idx % width);
-            grads.perlin_at(xs[j], ys[i])
-        }
+    let data = iproduct!(ys, xs).map(
+        |(y, x)| grads.perlin_at(x, y)
     ).collect();
 
-    Heightmap { data, rows: height, cols: width }
+    Heightmap { data, rows: height as usize, cols: width as usize }
 }
 
 pub fn perlin_layers(height: usize, width: usize, periods: Vec<usize>, amplitudes: Vec<f32>) -> Heightmap {
     assert_eq!(periods.len(), amplitudes.len());
     periods.into_iter().zip(amplitudes.into_iter()).map(
         |(period, amplitude)| {
-            let mut h = perlin(height, width, period);
+            let mut h = perlin(height, width, 0, 0, period);
             h.data.iter_mut().for_each(|x| *x *= amplitude);
             h
         }
