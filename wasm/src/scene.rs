@@ -1,6 +1,6 @@
 use std::{collections::HashMap, hash::Hash};
 
-use crate::{Vertex, Canvas, Color, triangles::Triangle, Pos2, Pos3, terrain::Heightmap, utils::{round_down, round_up}, to_vertex};
+use crate::{Vertex, Canvas, Color, triangles::Triangle, Pos2, Pos3, utils::{round_down, round_up}, to_vertex, Matrix};
 
 const THETA: f32 = std::f32::consts::FRAC_PI_6;
 const CHUNK_SIZE: i32 = 16;
@@ -232,7 +232,7 @@ impl Scene {
         }
     }
 
-    pub fn from_heightmap(h: Heightmap, min_height: i32) -> Self {
+    pub fn from_heightmap(h: Matrix<f32>, min_height: i32) -> Self {
         let mut scene = Scene {
             chunks: HashMap::new(),
         };
@@ -240,7 +240,7 @@ impl Scene {
             |(idx, height)| {
                 let (i, j) = (idx / h.cols, idx % h.cols);
                 for z in min_height..=(*height as i32) {
-                    let x = (256. * (1. / ((1 + z - min_height) as f32).powf(0.35))) as u8;
+                    let x = 1. / ((1 + z - min_height) as f32).powf(0.35);
                     scene.add(Block {
                         origin: [j as i32, i as i32, z],
                         color: Color { r: x, g: x, b: x },

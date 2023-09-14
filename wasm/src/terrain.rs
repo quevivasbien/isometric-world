@@ -102,13 +102,8 @@ impl Grads {
     }
 }
 
-pub struct Heightmap {
-    pub data: Vec<f32>,
-    pub rows: usize,
-    pub cols: usize,
-}
 
-fn perlin(height: usize, width: usize, x0: i32, y0: i32, step: usize) -> Heightmap {
+fn perlin(height: usize, width: usize, x0: i32, y0: i32, step: usize) -> Matrix<f32> {
     let grads = Grads::new(height, width, x0, y0, step);
     let ys = y0..(y0 + width as i32);
     let xs = x0..(x0 + width as i32);
@@ -117,10 +112,10 @@ fn perlin(height: usize, width: usize, x0: i32, y0: i32, step: usize) -> Heightm
         |(y, x)| grads.perlin_at(x, y)
     ).collect();
 
-    Heightmap { data, rows: height as usize, cols: width as usize }
+    Matrix::<f32>::new(data, height as usize, width as usize)
 }
 
-pub fn perlin_layers(height: usize, width: usize, periods: Vec<usize>, amplitudes: Vec<f32>) -> Heightmap {
+pub fn perlin_layers(height: usize, width: usize, periods: Vec<usize>, amplitudes: Vec<f32>) -> Matrix<f32> {
     assert_eq!(periods.len(), amplitudes.len());
     periods.into_iter().zip(amplitudes.into_iter()).map(
         |(period, amplitude)| {
@@ -133,7 +128,7 @@ pub fn perlin_layers(height: usize, width: usize, periods: Vec<usize>, amplitude
             let new_data = acc.data.iter().zip(h.data.iter()).map(
                 |(x_acc, x_new)| x_acc + x_new
             ).collect();
-            Heightmap { data: new_data, rows: acc.rows, cols: acc.cols }
+            Matrix::<f32>::new(new_data, acc.rows, acc.cols)
         }
     ).unwrap()
 }

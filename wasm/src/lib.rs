@@ -6,6 +6,7 @@ mod terrain;
 use scene::{Scene, Camera};
 use terrain::perlin_layers;
 use wasm_bindgen::{prelude::*, Clamped};
+use wasm_bindgen_test::console_log;
 
 use crate::utils::set_panic_hook;
 
@@ -20,18 +21,25 @@ type Pos3 = [i32; 3];
 
 #[derive(Clone)]
 pub struct Color {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8,
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
+}
+
+fn float_to_u8(x: f32) -> u8 {
+    (x * 256.) as u8
 }
 
 impl Color {
     pub fn scaled(&self, c: f32) -> Color {
         Color {
-            r: (((self.r as f32) * c) as u8).min(255).max(0),
-            g: (((self.g as f32) * c) as u8).min(255).max(0),
-            b: (((self.b as f32) * c) as u8).min(255).max(0),
+            r: self.r * c,
+            g: self.g * c,
+            b: self.b * c,
         }
+    }
+    pub fn bytes(&self) -> [u8; 4] {
+        [float_to_u8(self.r), float_to_u8(self.g), float_to_u8(self.b), 255]
     }
 }
 
@@ -41,7 +49,7 @@ pub struct Matrix<T: Copy> {
     cols: usize,
 }
 
-impl<T: Copy> Matrix<T> {
+impl<T: Copy + Default> Matrix<T> {
     pub fn new(data: Vec<T>, rows: usize, cols: usize) -> Self {
         assert_eq!(data.len(), rows * cols);
         Matrix { data, rows, cols }
@@ -60,44 +68,104 @@ impl<T: Copy> Matrix<T> {
         let idx = i * self.cols + j;
         self.data[idx] = value;
     }
+    pub fn row(&self, i: usize) -> &[T] {
+        &self.data[self.cols * i..self.cols * (i + 1)]
+    }
+    pub fn row_mut(&mut self, i: usize) -> &mut [T] {
+        &mut self.data[self.cols * i..self.cols * (i + 1)]
+    }
+    fn _append_below(&mut self, other: Matrix<T>) {
+        assert_eq!(self.cols, other.cols);
+        self.data.append(&mut other.data.clone());
+        self.rows = self.rows + other.rows;
+    }
+    fn _append_above(&mut self, other: Matrix<T>) {
+        assert_eq!(self.cols, other.cols);
+        let mut new_data = other.data.clone();
+        new_data.append(&mut self.data);
+        self.data = new_data;
+        self.rows = other.rows + self.rows;
+    }
+    fn _append_right(&mut self, other: Matrix<T>) {
+        assert_eq!(self.rows, other.rows);
+        let new_cols = self.cols + other.cols;
+        let mut new_data = vec![T::default(); new_cols * self.rows];
+        for i in 0..self.rows {
+            new_data[i*new_cols..i*new_cols + self.cols].copy_from_slice(self.row(i));
+            new_data[i*new_cols + self.cols..(i+1)*new_cols].copy_from_slice(other.row(i));
+        }
+        self.data = new_data;
+        self.cols = new_cols;
+    }
+    fn _append_left(&mut self, other: Matrix<T>) {
+        assert_eq!(self.rows, other.rows);
+        let new_cols = self.cols + other.cols;
+        let mut new_data = vec![T::default(); new_cols * self.rows];
+        for i in 0..self.rows {
+            new_data[i*new_cols..i*new_cols + self.cols].copy_from_slice(other.row(i));
+            new_data[i*new_cols + self.cols..(i+1)*new_cols].copy_from_slice(self.row(i));
+        }
+        self.data = new_data;
+        self.cols = new_cols;
+    }
+    fn displace_below(&mut self, other: Matrix<T>) {
+        assert_eq!(self.cols, other.cols);
+        assert!(self.rows >= other.rows);
+        let shift_size = other.data.len();
+        self.data.rotate_left(shift_size);
+        let len = self.data.len();
+        self.data[len-shift_size..].copy_from_slice(&other.data);
+    }
+    fn displace_above(&mut self, other: Matrix<T>) {
+        assert_eq!(self.cols, other.cols);
+        assert!(self.rows >= other.rows);
+        let shift_size = other.data.len();
+        self.data.rotate_right(shift_size);
+        self.data[..shift_size].copy_from_slice(&other.data);
+    }
+    fn displace_right(&mut self, other: Matrix<T>) {
+        assert_eq!(self.rows, other.rows);
+        assert!(self.cols >= other.cols);
+        let cols = self.cols;
+        for i in 0..self.rows {
+            let row = self.row_mut(i);
+            row.rotate_left(other.cols);
+            row[cols - other.cols..].copy_from_slice(other.row(i));
+        }
+    }
+    fn displace_left(&mut self, other: Matrix<T>) {
+        assert_eq!(self.rows, other.rows);
+        assert!(self.cols >= other.cols);
+        for i in 0..self.rows {
+            let row = self.row_mut(i);
+            row.rotate_right(other.cols);
+            row[..other.cols].copy_from_slice(other.row(i));
+        }
+    }
 }
 
-pub struct Canvas {
-    pub data: Vec<u8>,
-    rows: usize,
-    cols: usize,
-}
+pub struct Canvas(Matrix<[u8; 4]>);
 
 impl Canvas {
     pub fn new(rows: usize, cols: usize) -> Canvas {
-        Canvas {
-            data: vec![0; rows * cols * 4],
-            rows,
-            cols,
-        }
+        Canvas(
+            Matrix::new(vec![[0; 4]; rows * cols], rows, cols)
+        )
     }
 
     pub fn set_pixel(&mut self, i: usize, j: usize, c: &Color) {
-        if i >= self.rows || j >= self.cols {
+        if i >= self.0.rows || j >= self.0.cols {
             return;
         }
-        let i0 = (i * self.cols + j) * 4;
-        self.data[i0] = c.r;
-        self.data[i0 + 1] = c.g;
-        self.data[i0 + 2] = c.b;
-        self.data[i0 + 3] = 255;
+        self.0.set(i, j, c.bytes())
     }
 
-    pub fn row(&self, i: usize) -> &[u8] {
-        &self.data[4 * self.cols * i..4 * self.cols * (i + 1)]
-    }
-
-    pub fn row_mut(&mut self, i: usize) -> &mut [u8] {
-        &mut self.data[4 * self.cols * i..4 * self.cols * (i + 1)]
-    }
-
-    pub fn size(&self) -> usize {
-        self.rows * self.cols * 4
+    pub fn bytes(&self) -> Vec<u8> {
+        let mut out = vec![0; self.0.data.len()*4];
+        for (i, x) in self.0.data.iter().enumerate() {
+            out[i*4..(i+1)*4].copy_from_slice(x);
+        }
+        out
     }
 }
 
@@ -130,7 +198,7 @@ impl StateManager {
     }
 
     pub fn get_canvas(&self) -> Clamped<Vec<u8>> {
-        Clamped(self.canvas.data.clone())
+        Clamped(self.canvas.bytes())
     }
 
     pub fn shift_y(&mut self, dy: i32) {
@@ -138,19 +206,14 @@ impl StateManager {
         if dy <= 0 {
             let temp_camera = Camera::new(new_origin, dy.abs() as usize, self.camera.width, self.camera.scale);
             let canvas_slice = self.scene.draw(&temp_camera);
-            let shift_size = canvas_slice.size();
-            self.canvas.data.rotate_right(shift_size);
-            self.canvas.data[..shift_size].copy_from_slice(&canvas_slice.data);
+            self.canvas.0.displace_above(canvas_slice.0);
         } else {
             let temp_camera = Camera::new(
                 [new_origin[0], self.camera.origin[1] + self.camera.height as i32],
                 dy as usize, self.camera.width, self.camera.scale
             );
             let canvas_slice = self.scene.draw(&temp_camera);
-            let shift_size = canvas_slice.size();
-            self.canvas.data.rotate_left(shift_size);
-            let start_idx = self.canvas.size() - shift_size;
-            self.canvas.data[start_idx..].copy_from_slice(&canvas_slice.data);
+            self.canvas.0.displace_below(canvas_slice.0);
         }
         self.camera.origin = new_origin;
     }
@@ -160,25 +223,14 @@ impl StateManager {
         if dx <= 0 {
             let temp_camera = Camera::new(new_origin, self.camera.height, dx.abs() as usize, self.camera.scale);
             let canvas_slice = self.scene.draw(&temp_camera);
-            let line_shift = canvas_slice.cols * 4;
-            for i in 0..self.canvas.rows {
-                let row = self.canvas.row_mut(i);
-                row.rotate_right(line_shift);
-                row[..line_shift].copy_from_slice(canvas_slice.row(i));
-            }
+            self.canvas.0.displace_left(canvas_slice.0);
         } else {
             let temp_camera = Camera::new(
                 [self.camera.origin[0] + self.camera.width as i32, new_origin[1]],
                 self.camera.height, dx as usize, self.camera.scale,
             );
             let canvas_slice = self.scene.draw(&temp_camera);
-            let line_shift = canvas_slice.cols * 4;
-            for i in 0..self.canvas.rows {
-                let row = self.canvas.row_mut(i);
-                row.rotate_left(line_shift);
-                let start_idx = row.len() - line_shift;
-                row[start_idx..].copy_from_slice(canvas_slice.row(i));
-            }
+            self.canvas.0.displace_right(canvas_slice.0);
         }
         self.camera.origin = new_origin;
     }
