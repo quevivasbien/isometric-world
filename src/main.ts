@@ -25,7 +25,7 @@ function randomState() {
   const state = StateManager.new(
     150, 150,
     new Uint32Array([50, 15, 10]), new Float32Array([9, 7, 4]),
-    canvas.height, canvas.width, 6,
+    canvas.height, canvas.width, 6, Math.floor(Math.random() * 2048 - 1024),
   );
   state.shift(-offsetX, -offsetY);
   return state;
