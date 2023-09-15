@@ -157,7 +157,7 @@ impl StateManager {
     }
 
     pub fn draw(&mut self) {
-        self.canvas = self.scene.draw(&self.camera, true);
+        self.canvas = self.scene.draw(&self.camera);
     }
 
     pub fn get_canvas(&self) -> Clamped<Vec<u8>> {
@@ -168,14 +168,14 @@ impl StateManager {
         let new_origin = [self.camera.origin[0], self.camera.origin[1] + dy];
         if dy <= 0 {
             let temp_camera = Camera::new(new_origin, dy.abs() as usize, self.camera.width, self.camera.scale);
-            let canvas_slice = self.scene.draw(&temp_camera, false);
+            let canvas_slice = self.scene.draw(&temp_camera);
             self.canvas.0.displace_above(canvas_slice.0);
         } else {
             let temp_camera = Camera::new(
                 [new_origin[0], self.camera.origin[1] + self.camera.height as i32],
                 dy as usize, self.camera.width, self.camera.scale
             );
-            let canvas_slice = self.scene.draw(&temp_camera, false);
+            let canvas_slice = self.scene.draw(&temp_camera);
             self.canvas.0.displace_below(canvas_slice.0);
         }
         self.camera.origin = new_origin;
@@ -185,14 +185,14 @@ impl StateManager {
         let new_origin = [self.camera.origin[0] + dx, self.camera.origin[1]];
         if dx <= 0 {
             let temp_camera = Camera::new(new_origin, self.camera.height, dx.abs() as usize, self.camera.scale);
-            let canvas_slice = self.scene.draw(&temp_camera, false);
+            let canvas_slice = self.scene.draw(&temp_camera);
             self.canvas.0.displace_left(canvas_slice.0);
         } else {
             let temp_camera = Camera::new(
                 [self.camera.origin[0] + self.camera.width as i32, new_origin[1]],
                 self.camera.height, dx as usize, self.camera.scale,
             );
-            let canvas_slice = self.scene.draw(&temp_camera, false);
+            let canvas_slice = self.scene.draw(&temp_camera);
             self.canvas.0.displace_right(canvas_slice.0);
         }
         self.camera.origin = new_origin;

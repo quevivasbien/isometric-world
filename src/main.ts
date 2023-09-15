@@ -28,15 +28,14 @@ function randomState() {
   return state;
 }
 
-const STEP_SIZE = 20;
-const REFRESH_PERIOD = 2000;
+const STEP_SIZE = 40;
 
 init().then(() => {
   let state = randomState();
   render(state);
 
-  let needsRefresh = false;
   function requestMove(dir: 'up' | 'down' | 'left' | 'right') {
+    const time0 = Date.now();
     switch(dir) {
       case 'up':
         state.shift_y(-STEP_SIZE);
@@ -52,7 +51,7 @@ init().then(() => {
         break;
     }
     render(state, false);
-    needsRefresh = true;
+    console.log(`Shifted scene in ${Date.now() - time0}ms`);
   }
 
   document.addEventListener('keypress', (e) => {
@@ -75,11 +74,4 @@ init().then(() => {
         break;
     }
   });
-
-  setInterval(() => {
-    if (needsRefresh) {
-      needsRefresh = false;
-      render(state);
-    }
-  }, REFRESH_PERIOD);
 });
