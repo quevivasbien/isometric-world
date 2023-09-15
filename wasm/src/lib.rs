@@ -4,7 +4,6 @@ mod scene;
 mod terrain;
 
 use scene::{Scene, Camera};
-use terrain::perlin_layers;
 use wasm_bindgen::{prelude::*, Clamped};
 
 use crate::utils::set_panic_hook;
@@ -178,13 +177,12 @@ pub struct StateManager {
 #[wasm_bindgen]
 impl StateManager {
     pub fn new(
-        height: usize, width: usize, perlin_periods: Vec<usize>, perlin_amplitudes: Vec<f32>,
+        perlin_periods: Vec<usize>, perlin_amplitudes: Vec<f32>,
         pixel_height: usize, pixel_width: usize, scale: f32, seed: i32,
     ) -> Self {
         set_panic_hook();
         let max_amp = perlin_amplitudes.clone().into_iter().reduce(|acc, x| acc.max(x)).unwrap();
-        let heightmap = perlin_layers(height, width, perlin_periods, perlin_amplitudes, seed);
-        let scene = Scene::from_heightmap(heightmap, -(max_amp as i32));
+        let scene = Scene::new(perlin_periods, perlin_amplitudes, seed, -(max_amp as i32));
         let camera = Camera::new([0, 0], pixel_height, pixel_width, scale);
         let canvas = Canvas::new(pixel_height, pixel_width);
         Self {

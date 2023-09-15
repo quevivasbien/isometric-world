@@ -49,18 +49,21 @@ impl Grads {
     ) -> Self {
         assert!(height % step == 0 && width % step == 0);
         // console_log!("Initializing grads with x0 = {}, y0 = {}", x0, y0);
-        let nrows = height / step;
-        let ncols = height / step;
+        let nrows = height / step + 1;
+        let ncols = height / step + 1;
+        let shifted_seed = seed.wrapping_add(8);
         let data = (0..nrows * ncols).map(
             |i| {
                 let row = i / ncols;
                 let col = i % ncols;
                 let x = x0 + (col * step) as i32;
                 let y = y0 + (row * step) as i32;
+                // goal here is to mutate coordinates so we don't get any noticeable lines in the gradient
                 let hashkey = x.wrapping_add(seed)
-                                    .wrapping_mul(y.wrapping_sub(seed))
+                                    .wrapping_add(y)
+                                    .wrapping_mul(y.wrapping_add(shifted_seed))
                                     .wrapping_mul(step as i32);
-                (randn_hash(hashkey), randn_hash(-hashkey))
+                (randn_hash(hashkey.wrapping_add(16)), randn_hash(-hashkey))
             }
         ).collect();
 
@@ -74,7 +77,7 @@ impl Grads {
         let dx = x - (xi as f32);
         let dy = y - (yi as f32);
         // console_log!("getting ({}, {})", yi, xi);
-        let (gx, gy) = self.grads.get(yi.min(self.grads.rows - 1), xi.min(self.grads.cols - 1));
+        let (gx, gy) = self.grads.get(yi, xi);
         
         dx * gx + dy * gy
     }
@@ -125,13 +128,14 @@ fn perlin(
 
 pub fn perlin_layers(
     height: usize, width: usize,
-    periods: Vec<usize>, amplitudes: Vec<f32>,  
+    x0: i32, y0: i32,
+    periods: &Vec<usize>, amplitudes: &Vec<f32>,  
     seed: i32
 ) -> Matrix<f32> {
     assert_eq!(periods.len(), amplitudes.len());
-    periods.into_iter().zip(amplitudes.into_iter()).map(
+    periods.iter().zip(amplitudes.iter()).map(
         |(period, amplitude)| {
-            let mut h = perlin(height, width, 0, 0, period, seed);
+            let mut h = perlin(height, width, x0, y0, *period, seed);
             h.data.iter_mut().for_each(|x| *x *= amplitude);
             h
         }

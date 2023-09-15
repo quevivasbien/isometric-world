@@ -1,9 +1,13 @@
-use std::{collections::HashMap, hash::Hash};
+use std::{collections::HashMap, hash::Hash, iter::StepBy};
 
-use crate::{Vertex, Canvas, Color, triangles::Triangle, Pos2, Pos3, utils::{round_down, round_up}, to_vertex, Matrix};
+use itertools::iproduct;
+use wasm_bindgen_test::console_log;
+
+use crate::{Vertex, Canvas, Color, triangles::Triangle, Pos2, Pos3, utils::{round_down, round_up}, to_vertex, terrain::perlin_layers};
 
 const THETA: f32 = std::f32::consts::FRAC_PI_6;
-const CHUNK_SIZE: i32 = 16;
+const HEIGHTMAP_CHUNK_SIZE: i32 = 128;
+const BLOCK_CHUNK_SIZE: i32 = 16;
 
 struct Block {
     pub origin: Pos3,
@@ -45,13 +49,13 @@ impl Bounds {
     }
 }
 
-// a set of blocks within some rectangle in the x,y plane
-struct Chunk {
+// a set of blocks within some rectangle in the x, y plane
+struct BlockChunk {
     bounds: Bounds,
     blocks: Vec<Block>,
 }
 
-impl Chunk {
+impl BlockChunk {
     pub fn new(bounds: Bounds) -> Self {
         Self { bounds, blocks: Vec::new(), }
     }
@@ -124,9 +128,7 @@ impl Camera {
         }
     }
 
-    // determines which chunks in an array of chunks are (at least partially) in view
-    // assumes that hash map keys are same as chunk origins, and chunk bounds are divisible by CHUNK_SIZE
-    fn in_view<'a>(&self, chunks: &'a HashMap<Pos2, Chunk>) -> Vec<&'a Chunk> {
+    fn in_view(&self, chunk_size: i32) -> itertools::Product<StepBy<std::ops::Range<i32>>, StepBy<std::ops::Range<i32>>> {
         // first get coordinates of screen bounds at z = 0
         let [x0, y0] = to_vertex(self.origin);
         let inv_proj = self.proj_matrix.inverse();
@@ -134,21 +136,25 @@ impl Camera {
         let top_right = inv_proj.proj([x0 + self.width as f32, y0]);
         let bottom_left = inv_proj.proj([x0, y0 + self.height as f32]);
         let bottom_right = inv_proj.proj([x0 + self.width as f32, y0 + self.height as f32]);
-        // take extreme values and round to surrounding multiples of CHUNK_SIZE
-        let x_min = round_down(top_left[0] as i32, CHUNK_SIZE);
-        let x_max = round_up(bottom_right[0] as i32, CHUNK_SIZE);
-        let y_min = round_down(top_right[1] as i32, CHUNK_SIZE);
-        let y_max = round_up(bottom_left[1] as i32, CHUNK_SIZE);
-        let mut chunks_out = Vec::<&Chunk>::new();
-        for x in (x_min..x_max).step_by(CHUNK_SIZE as usize) {
-            for y in (y_min..y_max).step_by(CHUNK_SIZE as usize) {
-                match chunks.get(&[x, y]) {
-                    Some(chunk) => chunks_out.push(chunk),
-                    None => (),
-                }
+        // take extreme values and round to surrounding multiples of chunk_size
+        let x_min = round_down(top_left[0] as i32, chunk_size);
+        let x_max = round_up(bottom_right[0] as i32, chunk_size);
+        let y_min = round_down(top_right[1] as i32, chunk_size);
+        let y_max = round_up(bottom_left[1] as i32, chunk_size);
+        iproduct!((x_min..x_max).step_by(chunk_size as usize), (y_min..y_max).step_by(chunk_size as usize))
+    }
+
+    // determines which chunks in an array of chunks are (at least partially) in view
+    // assumes that hash map keys are same as chunk origins, and chunk bounds are divisible by chunk_size
+    fn chunks_in_view<'a, T>(&self, chunks: &'a HashMap<Pos2, T>, chunk_size: i32) -> Vec<&'a T> {
+        let mut chunks_out = Vec::<&T>::new();
+        for (x, y) in self.in_view(chunk_size) {
+            match chunks.get(&[x, y]) {
+                Some(chunk) => chunks_out.push(chunk),
+                None => (),
             }
         }
-
+        
         chunks_out
     }
 }
@@ -215,50 +221,119 @@ impl<'a> Slice<'a> {
     }
 }
 
-pub struct Scene {
-    chunks: HashMap<Pos2, Chunk>,
+struct SliceMap<'a>(HashMap<SliceKey, Slice<'a>>);
+
+impl<'a> SliceMap<'a> {
+    fn new() -> Self {
+        Self(HashMap::new())
+    }
+    fn process_bchunks(&mut self, chunks: Vec<&'a BlockChunk>) {
+        for c in chunks.into_iter() {
+            c.process_slices(&mut self.0);
+        }
+    }
+    fn process_hchunks(&mut self, camera: &Camera, chunks: Vec<&'a HeightmapChunk>) {
+        for c in chunks.into_iter() {
+            let bchunks = camera.chunks_in_view(&c.children, BLOCK_CHUNK_SIZE);
+            self.process_bchunks(bchunks);
+        }
+    }
 }
 
-impl Scene {
+struct HeightmapChunk {
+    children: HashMap<Pos2, BlockChunk>,
+}
+
+impl HeightmapChunk {
+
     fn add(&mut self, b: Block) {
-        let chunk_x0 = round_down(b.origin[0], CHUNK_SIZE);
-        let chunk_y0 = round_down(b.origin[1], CHUNK_SIZE);
-        if let Some(chunk) = self.chunks.get_mut(&[chunk_x0, chunk_y0]) {
+        let chunk_x0 = round_down(b.origin[0], BLOCK_CHUNK_SIZE);
+        let chunk_y0 = round_down(b.origin[1], BLOCK_CHUNK_SIZE);
+        if let Some(chunk) = self.children.get_mut(&[chunk_x0, chunk_y0]) {
             chunk.add(b).unwrap();
         } else {
-            let mut chunk = Chunk::new(Bounds{ x: (chunk_x0, chunk_x0 + CHUNK_SIZE), y: (chunk_y0, chunk_y0 + CHUNK_SIZE) });
+            let mut chunk = BlockChunk::new(
+                Bounds{
+                    x: (chunk_x0, chunk_x0 + BLOCK_CHUNK_SIZE),
+                    y: (chunk_y0, chunk_y0 + BLOCK_CHUNK_SIZE)
+                }
+            );
             chunk.add(b).unwrap();
-            self.chunks.insert([chunk_x0, chunk_y0], chunk);
+            self.children.insert([chunk_x0, chunk_y0], chunk);
         }
     }
 
-    pub fn from_heightmap(h: Matrix<f32>, min_height: i32) -> Self {
-        let mut scene = Scene {
-            chunks: HashMap::new(),
-        };
-        h.data.iter().enumerate().for_each(
+    pub fn new(
+        origin: Pos2,
+        periods: &Vec<usize>, amplitudes: &Vec<f32>,
+        seed: i32, min_height: i32,
+    ) -> Self {
+        let mut this = Self { children: HashMap::new() };
+        let heightmap = perlin_layers(
+            HEIGHTMAP_CHUNK_SIZE as usize, HEIGHTMAP_CHUNK_SIZE as usize,
+            origin[0], origin[1],
+            periods, amplitudes, seed
+        );
+        heightmap.data.iter().enumerate().for_each(
             |(idx, height)| {
-                let (i, j) = (idx / h.cols, idx % h.cols);
+                let (i, j) = (idx / heightmap.cols, idx % heightmap.cols);
                 for z in min_height..=(*height as i32) {
                     let x = 1. / ((1 + z - min_height) as f32).powf(0.35);
-                    scene.add(Block {
-                        origin: [j as i32, i as i32, z],
+                    let origin = [
+                        j as i32 + origin[0],
+                        i as i32 + origin[1],
+                        z
+                    ];
+                    this.add(Block {
+                        origin,
                         color: Color { r: x, g: x, b: x },
                     });
                 }
             }
         );
 
-        scene
+        this
+    }
+}
+
+pub struct Scene {
+    chunks: HashMap<Pos2, HeightmapChunk>,
+    periods: Vec<usize>,
+    amplitudes: Vec<f32>,
+    seed: i32, min_height: i32,
+}
+
+impl Scene {
+    pub fn new(periods: Vec<usize>, amplitudes: Vec<f32>, seed: i32, min_height: i32) -> Self {
+        Self { chunks: HashMap::new(), periods, amplitudes, seed, min_height }
     }
 
-    pub fn draw(&self, camera: &Camera) -> Canvas {
-        let mut slices = HashMap::<SliceKey, Slice>::new();
-        for chunk in camera.in_view(&self.chunks) {
-            chunk.process_slices(&mut slices)
+    // get rid of chunks that are no longer visible
+    // create new chunks if they are visible but not yet present
+    fn set_chunks(&mut self, camera: &Camera) {
+        let mut new_chunks: HashMap<Pos2, HeightmapChunk> = HashMap::new();
+        for (x, y) in camera.in_view(HEIGHTMAP_CHUNK_SIZE) {
+            if let Some(chunk) = self.chunks.remove(&[x, y]) {
+                new_chunks.insert([x, y], chunk);
+            } else {
+                console_log!("Adding chunk at ({}, {})", x, y);
+                new_chunks.insert([x, y], HeightmapChunk::new(
+                    [x, y],
+                    &self.periods, &self.amplitudes,
+                    self.seed, self.min_height
+                ));
+            }
         }
+        self.chunks = new_chunks;
+    }
+
+    pub fn draw(&mut self, camera: &Camera) -> Canvas {
+        let mut slices = SliceMap::new();
+        self.set_chunks(&camera);
+        let chunks = self.chunks.iter().map(|(_, c)| c).collect();
+        slices.process_hchunks(camera, chunks);
         let mut canvas = Canvas::new(camera.height, camera.width);
-        for (_, slice) in slices.into_iter() {
+        for (_, slice) in slices.0.into_iter() {
             slice.draw(&camera.proj_matrix, camera.origin, &mut canvas);
         }
 
