@@ -21,7 +21,7 @@ function render(state: StateManager, draw = true) {
 
 function randomState() {
   const state = StateManager.new(
-    new Uint32Array([32, 16, 8]), new Float32Array([9, 7, 4]),
+    new Uint32Array([64, 16, 8]), new Float32Array([15, 8, 3]),
     canvas.height, canvas.width, 12,
     Math.floor(Math.random() * 2048 - 1024),
   );
@@ -29,6 +29,7 @@ function randomState() {
 }
 
 const STEP_SIZE = 20;
+const REFRESH_PERIOD = 2000;
 
 init().then(() => {
   let state = randomState();
@@ -80,5 +81,5 @@ init().then(() => {
       needsRefresh = false;
       render(state);
     }
-  }, 1000);
+  }, REFRESH_PERIOD);
 });

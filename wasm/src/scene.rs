@@ -1,12 +1,11 @@
 use std::{collections::HashMap, hash::Hash, iter::StepBy};
 
 use itertools::iproduct;
-use wasm_bindgen_test::console_log;
 
 use crate::{Vertex, Canvas, Color, triangles::Triangle, Pos2, Pos3, utils::{round_down, round_up}, to_vertex, terrain::perlin_layers};
 
 const THETA: f32 = std::f32::consts::FRAC_PI_6;
-const HEIGHTMAP_CHUNK_SIZE: i32 = 128;
+const HEIGHTMAP_CHUNK_SIZE: i32 = 64;
 const BLOCK_CHUNK_SIZE: i32 = 16;
 
 struct Block {
@@ -308,28 +307,43 @@ impl Scene {
         Self { chunks: HashMap::new(), periods, amplitudes, seed, min_height }
     }
 
-    // get rid of chunks that are no longer visible
     // create new chunks if they are visible but not yet present
-    fn set_chunks(&mut self, camera: &Camera) {
-        let mut new_chunks: HashMap<Pos2, HeightmapChunk> = HashMap::new();
-        for (x, y) in camera.in_view(HEIGHTMAP_CHUNK_SIZE) {
-            if let Some(chunk) = self.chunks.remove(&[x, y]) {
-                new_chunks.insert([x, y], chunk);
-            } else {
-                console_log!("Adding chunk at ({}, {})", x, y);
-                new_chunks.insert([x, y], HeightmapChunk::new(
-                    [x, y],
-                    &self.periods, &self.amplitudes,
-                    self.seed, self.min_height
-                ));
+    // if cull, get rid of chunks that are no longer visible
+    fn set_chunks(&mut self, camera: &Camera, cull: bool) {
+        if cull {
+            let mut new_chunks: HashMap<Pos2, HeightmapChunk> = HashMap::new();
+            for (x, y) in camera.in_view(HEIGHTMAP_CHUNK_SIZE) {
+                if let Some(chunk) = self.chunks.remove(&[x, y]) {
+                    new_chunks.insert([x, y], chunk);
+                } else {
+                    // console_log!("Adding chunk at ({}, {})", x, y);
+                    new_chunks.insert([x, y], HeightmapChunk::new(
+                        [x, y],
+                        &self.periods, &self.amplitudes,
+                        self.seed, self.min_height
+                    ));
+                }
+            }
+            self.chunks = new_chunks;
+        } else {
+            for (x, y) in camera.in_view(HEIGHTMAP_CHUNK_SIZE) {
+                match self.chunks.get(&[x, y]) {
+                    None => {
+                        self.chunks.insert([x, y], HeightmapChunk::new(
+                            [x, y],
+                            &self.periods, &self.amplitudes,
+                            self.seed, self.min_height
+                        ));
+                    },
+                    _ => (),
+                }
             }
         }
-        self.chunks = new_chunks;
     }
 
-    pub fn draw(&mut self, camera: &Camera) -> Canvas {
+    pub fn draw(&mut self, camera: &Camera, cull_chunks: bool) -> Canvas {
         let mut slices = SliceMap::new();
-        self.set_chunks(&camera);
+        self.set_chunks(&camera, cull_chunks);
         let chunks = self.chunks.iter().map(|(_, c)| c).collect();
         slices.process_hchunks(camera, chunks);
         let mut canvas = Canvas::new(camera.height, camera.width);

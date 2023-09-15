@@ -72,40 +72,6 @@ impl<T: Copy + Default> Matrix<T> {
     pub fn row_mut(&mut self, i: usize) -> &mut [T] {
         &mut self.data[self.cols * i..self.cols * (i + 1)]
     }
-    fn _append_below(&mut self, other: Matrix<T>) {
-        assert_eq!(self.cols, other.cols);
-        self.data.append(&mut other.data.clone());
-        self.rows = self.rows + other.rows;
-    }
-    fn _append_above(&mut self, other: Matrix<T>) {
-        assert_eq!(self.cols, other.cols);
-        let mut new_data = other.data.clone();
-        new_data.append(&mut self.data);
-        self.data = new_data;
-        self.rows = other.rows + self.rows;
-    }
-    fn _append_right(&mut self, other: Matrix<T>) {
-        assert_eq!(self.rows, other.rows);
-        let new_cols = self.cols + other.cols;
-        let mut new_data = vec![T::default(); new_cols * self.rows];
-        for i in 0..self.rows {
-            new_data[i*new_cols..i*new_cols + self.cols].copy_from_slice(self.row(i));
-            new_data[i*new_cols + self.cols..(i+1)*new_cols].copy_from_slice(other.row(i));
-        }
-        self.data = new_data;
-        self.cols = new_cols;
-    }
-    fn _append_left(&mut self, other: Matrix<T>) {
-        assert_eq!(self.rows, other.rows);
-        let new_cols = self.cols + other.cols;
-        let mut new_data = vec![T::default(); new_cols * self.rows];
-        for i in 0..self.rows {
-            new_data[i*new_cols..i*new_cols + self.cols].copy_from_slice(other.row(i));
-            new_data[i*new_cols + self.cols..(i+1)*new_cols].copy_from_slice(self.row(i));
-        }
-        self.data = new_data;
-        self.cols = new_cols;
-    }
     fn displace_below(&mut self, other: Matrix<T>) {
         assert_eq!(self.cols, other.cols);
         assert!(self.rows >= other.rows);
@@ -191,7 +157,7 @@ impl StateManager {
     }
 
     pub fn draw(&mut self) {
-        self.canvas = self.scene.draw(&self.camera);
+        self.canvas = self.scene.draw(&self.camera, true);
     }
 
     pub fn get_canvas(&self) -> Clamped<Vec<u8>> {
@@ -202,14 +168,14 @@ impl StateManager {
         let new_origin = [self.camera.origin[0], self.camera.origin[1] + dy];
         if dy <= 0 {
             let temp_camera = Camera::new(new_origin, dy.abs() as usize, self.camera.width, self.camera.scale);
-            let canvas_slice = self.scene.draw(&temp_camera);
+            let canvas_slice = self.scene.draw(&temp_camera, false);
             self.canvas.0.displace_above(canvas_slice.0);
         } else {
             let temp_camera = Camera::new(
                 [new_origin[0], self.camera.origin[1] + self.camera.height as i32],
                 dy as usize, self.camera.width, self.camera.scale
             );
-            let canvas_slice = self.scene.draw(&temp_camera);
+            let canvas_slice = self.scene.draw(&temp_camera, false);
             self.canvas.0.displace_below(canvas_slice.0);
         }
         self.camera.origin = new_origin;
@@ -219,14 +185,14 @@ impl StateManager {
         let new_origin = [self.camera.origin[0] + dx, self.camera.origin[1]];
         if dx <= 0 {
             let temp_camera = Camera::new(new_origin, self.camera.height, dx.abs() as usize, self.camera.scale);
-            let canvas_slice = self.scene.draw(&temp_camera);
+            let canvas_slice = self.scene.draw(&temp_camera, false);
             self.canvas.0.displace_left(canvas_slice.0);
         } else {
             let temp_camera = Camera::new(
                 [self.camera.origin[0] + self.camera.width as i32, new_origin[1]],
                 self.camera.height, dx as usize, self.camera.scale,
             );
-            let canvas_slice = self.scene.draw(&temp_camera);
+            let canvas_slice = self.scene.draw(&temp_camera, false);
             self.canvas.0.displace_right(canvas_slice.0);
         }
         self.camera.origin = new_origin;
